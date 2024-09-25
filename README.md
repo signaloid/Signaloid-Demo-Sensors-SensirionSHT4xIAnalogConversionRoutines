@@ -5,7 +5,7 @@
 Example demonstrating real-time output uncertainty estimation for calibrated ADC values from the SHT4xI sensor[^1].
 
 ## Introduction
-The SHT4xI is a Humidity and Temperature Sensor IC[^1].
+The SHT4xI is a humidity and temperature sensor IC[^1].
 
 ## Getting started
 
