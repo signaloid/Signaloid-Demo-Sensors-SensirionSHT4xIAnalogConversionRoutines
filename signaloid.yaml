@@ -1,9 +1,28 @@
 MinimumCore:
     Microarchitecture: Athens
     MemorySize: 256000
-    Precision: 32 
+    Precision: 32
 
 TraceVariables:
     - File: "main.c"
-      LineNumber: 116
-      Expression: "outputDistributions[0:2]"
+
+      LineNumber: 71
+
+      Expression: "outputVariables[0:2]"
+
+BenchmarkingVariables:
+    - VariableName: outputVariables[0]
+      VariableDescription: "%"
+      OutputObject: Distribution
+      CommandLineArguments: -S 0
+    - VariableName: outputVariables[1]
+      VariableDescription: Celcius
+      OutputObject: Distribution
+      CommandLineArguments: -S 1
+    - VariableName: outputVariables[2]
+      VariableDescription: Fahrenheit
+      OutputObject: Distribution
+      CommandLineArguments: -S 2
+
+BenchmarkingAllOutputs:
+    - CommandLineArguments: -S 3
