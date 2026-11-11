@@ -1,5 +1,5 @@
 /*
- *	Copyright (c) 2026, Signaloid.
+ *	Copyright (c) 2024-2026, Signaloid.
  *
  *	Permission is hereby granted, free of charge, to any person obtaining a copy
  *	of this software and associated documentation files (the "Software"), to deal
@@ -31,56 +31,39 @@
 #include "utilities.h"
 #include "kernel.h"
 
-/**
- *	@brief  Sets the Input Variables via call to UxHw Parametric function.
- *
- *	@param  inputVariables	: An array of double values, where the function writes the distributional data.
- */
-static void
-setInputVariablesViaUxHwCall(double * inputVariables)
-{
-	inputVariables[kSensirionSHT4xIInputVariableIndexVrh] = UxHwDoubleUniformDist(
-		kSensirionSHT4xIDefaultInputDistributionVrhUniformDistLow,
-		kSensirionSHT4xIDefaultInputDistributionVrhUniformDistHigh
-	);
+#ifdef NO_OS_AVAILABLE
 
-	inputVariables[kSensirionSHT4xIInputVariableIndexVt] = UxHwDoubleUniformDist(
-		kSensirionSHT4xIDefaultInputDistributionVtUniformDistLow,
-		kSensirionSHT4xIDefaultInputDistributionVtUniformDistHigh
-	);
-
-	inputVariables[kSensirionSHT4xIInputVariableIndexVsupply] = UxHwDoubleUniformDist(
-		kSensirionSHT4xIDefaultInputDistributionVsupplyUniformDistLow,
-		kSensirionSHT4xIDefaultInputDistributionVsupplyUniformDistHigh
-	);
-
-	return;
-}
+void
+returnZeroNoOS(void);
+#endif
 
 int
 main(int argc, char *  argv[])
 {
 	CommandLineArguments arguments = { 0 };
 
-	double          calibratedSensorOutput;
-	double *        monteCarloOutputSamples = NULL;
-	clock_t         start;
-	clock_t         end;
-	double          cpuTimeUsedSeconds;
-	double          inputVariables[kSensirionSHT4xIInputVariableIndexMax];
-	double          outputVariables[kSensirionSHT4xIOutputVariableIndexMax];
-	const char *    outputVariableNames[kSensirionSHT4xIOutputVariableIndexMax] = {
+	double *                    monteCarloOutputSamples = NULL;
+	clock_t                     start = 0;
+	clock_t                     end;
+	double                      cpuTimeUsedSeconds;
+	double                      outputVariables[kSensirionSHT4xIOutputVariableIndexMax] = { 0 };
+	const char *                outputVariableNames[kSensirionSHT4xIOutputVariableIndexMax] = {
 		"Calibrated Relative Humidity",
 		"Calibrated Temperature (in Celsius)",
 		"Calibrated Temperature (in Farenheit)"
 	};
-	const char *    outputVariableDescriptions[] = {
-		[kSensirionSHT4xIOutputVariableIndexCalibratedRelativeHumidity]        = "%",
-		[kSensirionSHT4xIOutputVariableIndexCalibratedTemperatureCelcius]      = "Celcius",
-		[kSensirionSHT4xIOutputVariableIndexCalibratedTemperatureFahrenheit]   = "Fahrenheit"
+	const char *                outputVariableDescriptions[] = {
+		[kSensirionSHT4xIOutputVariableIndexCalibratedRelativeHumidity]         = "%",
+		[kSensirionSHT4xIOutputVariableIndexCalibratedTemperatureCelcius]       = "Celcius",
+		[kSensirionSHT4xIOutputVariableIndexCalibratedTemperatureFahrenheit]    = "Fahrenheit"
 	};
-	const char *    applicationDescription = "Sensirion SHT4xI Analog Conversion Routines";
-	MeanAndVariance meanAndVariance;
+	kOutputVariableTypeIndex    outputVariableTypes[kSensirionSHT4xIOutputVariableIndexMax] = {
+		[kSensirionSHT4xIOutputVariableIndexCalibratedRelativeHumidity]         = kOutputVariableTypeDistribution,
+		[kSensirionSHT4xIOutputVariableIndexCalibratedTemperatureCelcius]       = kOutputVariableTypeDistribution,
+		[kSensirionSHT4xIOutputVariableIndexCalibratedTemperatureFahrenheit]    = kOutputVariableTypeDistribution,
+	};
+	const char *                applicationDescription = "Sensirion SHT4xI Analog Conversion Routines";
+	MeanAndVariance             meanAndVariance;
 
 	/*
 	 *	Get command line arguments.
@@ -99,6 +82,8 @@ main(int argc, char *  argv[])
 		);
 	}
 
+	const bool isScalarOutputSelected = isSelectedOutputScalar(&arguments.common, outputVariableTypes, kSensirionSHT4xIOutputVariableIndexMax);
+
 	/*
 	 *	Start timing.
 	 */
@@ -107,37 +92,36 @@ main(int argc, char *  argv[])
 		start = clock();
 	}
 
-	for (size_t ii = 0; ii < arguments.common.numberOfMonteCarloIterations; ii++)
-	{
-		/*
-		 *	Set input distribution values, inside the main computation
-		 *	loop, so that it can also generate samples in the native
-		 *	Monte Carlo Execution Mode.
-		 */
-		setInputVariablesViaUxHwCall(inputVariables);
-
-		calibratedSensorOutput = SensirionSHT4xI_calculateOutput(arguments.common.outputSelect, inputVariables, outputVariables);
-
-		/*
-		 *	For this application, calibratedSensorOutput is the item we track.
-		 */
-		if (arguments.common.isMonteCarloMode)
-		{
-			monteCarloOutputSamples[ii] = calibratedSensorOutput;
-		}
-	}
-
 	/*
-	 *	If not doing Laplace version, then approximate the cost of the third phase of
-	 *	Monte Carlo (post-processing), by calculating the mean and variance.
+	 *	Dispatch to the mode-specific kernel. The Monte Carlo loop (when
+	 *	applicable) lives inside `SensirionSHT4xICalculateOutputMonteCarlo`. UxHw mode runs a
+	 *	single distributional evaluation inside `SensirionSHT4xICalculateOutputUxHw`.
 	 */
 	if (arguments.common.isMonteCarloMode)
 	{
-		meanAndVariance = calculateMeanAndVarianceOfDoubleSamples(
-			monteCarloOutputSamples,
-			arguments.common.numberOfMonteCarloIterations
+		SensirionSHT4xICalculateOutputMonteCarlo(
+			arguments.common.outputSelect,
+			arguments.common.numberOfMonteCarloIterations,
+			outputVariables,
+			monteCarloOutputSamples
 		);
-		calibratedSensorOutput = meanAndVariance.mean;
+
+		/*
+		 *	If not doing UxHw version, then approximate the cost of the third phase of
+		 *	Monte Carlo (post-processing), by calculating the mean and variance.
+		 */
+		if (!isScalarOutputSelected)
+		{
+			meanAndVariance = calculateMeanAndVarianceOfDoubleSamples(
+				monteCarloOutputSamples,
+				arguments.common.numberOfMonteCarloIterations
+			);
+			outputVariables[arguments.common.outputSelect] = meanAndVariance.mean;
+		}
+	}
+	else
+	{
+		SensirionSHT4xICalculateOutputUxHw(arguments.common.outputSelect, outputVariables);
 	}
 
 	/*
@@ -160,7 +144,8 @@ main(int argc, char *  argv[])
 			outputVariables,
 			outputVariableNames,
 			kSensirionSHT4xIOutputVariableIndexMax,
-			applicationDescription
+			applicationDescription,
+			outputVariableTypes
 		);
 	}
 	else
@@ -171,7 +156,8 @@ main(int argc, char *  argv[])
 			outputVariables,
 			outputVariableNames,
 			outputVariableDescriptions,
-			monteCarloOutputSamples
+			monteCarloOutputSamples,
+			outputVariableTypes
 		);
 	}
 
@@ -207,11 +193,17 @@ main(int argc, char *  argv[])
 	{
 		saveMonteCarloDoubleDataToDataDotOutFile(
 			monteCarloOutputSamples, (uint64_t) (cpuTimeUsedSeconds * 1000000),
-			arguments.common.numberOfMonteCarloIterations
+			isScalarOutputSelected ? 1 : arguments.common.numberOfMonteCarloIterations
 		);
 
 		free(monteCarloOutputSamples);
 	}
 
+#ifdef NO_OS_AVAILABLE
+	returnZeroNoOS();
+#else
+
 	return 0;
+
+#endif
 }
