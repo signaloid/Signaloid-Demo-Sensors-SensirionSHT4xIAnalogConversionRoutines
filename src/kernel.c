@@ -1,5 +1,5 @@
 /*
- *	Copyright (c) 2026, Signaloid.
+ *	Copyright (c) 2024-2026, Signaloid.
  *
  *	Permission is hereby granted, free of charge, to any person obtaining a copy
  *	of this software and associated documentation files (the "Software"), to deal
@@ -20,9 +20,39 @@
  *	SOFTWARE.
  */
 
-#include "kernel.h"
 #include <stdbool.h>
+#include <stddef.h>
+#include <uxhw.h>
+#include "kernel.h"
 
+
+/**
+ *	@brief  Sets the Input Variables via call to UxHw Parametric function.
+ *
+ *	In the native Monte Carlo execution mode, each call generates new samples.
+ *
+ *	@param  inputVariables	: An array of double values, where the function writes the distributional data.
+ */
+static void
+SensirionSHT4xISetInputVariablesViaUxHwCall(double * inputVariables)
+{
+	inputVariables[kSensirionSHT4xIInputVariableIndexVrh] = UxHwDoubleUniformDist(
+		kSensirionSHT4xIDefaultInputDistributionVrhUniformDistLow,
+		kSensirionSHT4xIDefaultInputDistributionVrhUniformDistHigh
+	);
+
+	inputVariables[kSensirionSHT4xIInputVariableIndexVt] = UxHwDoubleUniformDist(
+		kSensirionSHT4xIDefaultInputDistributionVtUniformDistLow,
+		kSensirionSHT4xIDefaultInputDistributionVtUniformDistHigh
+	);
+
+	inputVariables[kSensirionSHT4xIInputVariableIndexVsupply] = UxHwDoubleUniformDist(
+		kSensirionSHT4xIDefaultInputDistributionVsupplyUniformDistLow,
+		kSensirionSHT4xIDefaultInputDistributionVsupplyUniformDistHigh
+	);
+
+	return;
+}
 
 double
 SensirionSHT4xI_calculateOutput(uint8_t outputSelect, double *  inputVariables, double *  outputVariables)
@@ -60,4 +90,43 @@ SensirionSHT4xI_calculateOutput(uint8_t outputSelect, double *  inputVariables, 
 	}
 
 	return calibratedValue;
+}
+
+double
+SensirionSHT4xICalculateOutputUxHw(size_t outputSelect, double *  outputVariables)
+{
+	double inputVariables[kSensirionSHT4xIInputVariableIndexMax];
+
+	SensirionSHT4xISetInputVariablesViaUxHwCall(inputVariables);
+
+	return SensirionSHT4xI_calculateOutput(outputSelect, inputVariables, outputVariables);
+}
+
+double
+SensirionSHT4xICalculateOutputMonteCarlo(
+	size_t      outputSelect,
+	size_t      numberOfMonteCarloIterations,
+	double *    outputVariables,
+	double *    monteCarloOutputSamples)
+{
+	double  inputVariables[kSensirionSHT4xIInputVariableIndexMax];
+	double  calibratedSensorOutput = 0.0;
+
+	for (size_t ii = 0; ii < numberOfMonteCarloIterations; ii++)
+	{
+		/*
+		 *	Set input distribution values inside the loop, so that each
+		 *	iteration draws new samples in the native Monte Carlo execution mode.
+		 */
+		SensirionSHT4xISetInputVariablesViaUxHwCall(inputVariables);
+
+		calibratedSensorOutput = SensirionSHT4xI_calculateOutput(outputSelect, inputVariables, outputVariables);
+
+		/*
+		 *	For this application, calibratedSensorOutput is the item we track.
+		 */
+		monteCarloOutputSamples[ii] = calibratedSensorOutput;
+	}
+
+	return calibratedSensorOutput;
 }
