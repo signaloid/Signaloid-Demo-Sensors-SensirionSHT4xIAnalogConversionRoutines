@@ -13,15 +13,15 @@ TraceVariables:
 
 BenchmarkingVariables:
     - VariableName: outputVariables[0]
-      VariableDescription: "%"
+      VariableDescription: Calibrated Relative Humidity (%)
       OutputObject: Distribution
       CommandLineArguments: -S 0
     - VariableName: outputVariables[1]
-      VariableDescription: Celcius
+      VariableDescription: Calibrated Temperature (in Celsius)
       OutputObject: Distribution
       CommandLineArguments: -S 1
     - VariableName: outputVariables[2]
-      VariableDescription: Fahrenheit
+      VariableDescription: Calibrated Temperature (in Fahrenheit)
       OutputObject: Distribution
       CommandLineArguments: -S 2
 
